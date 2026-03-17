@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from superbuild.main import _install_charmcraft, _parse_build_context, _peek_verbose, main
+from charmbuild.main import _install_charmcraft, _parse_build_context, _peek_verbose, main
 
 
 # ---------------------------------------------------------------------------
@@ -44,7 +44,7 @@ class TestPeekVerbose:
 
 class TestInstallCharmcraft:
     def test_runs_snap_install(self):
-        with patch("superbuild.main.subprocess.run") as mock_run:
+        with patch("charmbuild.main.subprocess.run") as mock_run:
             _install_charmcraft()
             mock_run.assert_called_once_with(
                 ["sudo", "snap", "install", "charmcraft", "--classic"],
@@ -108,15 +108,15 @@ class TestMain:
         result_mock.returncode = mock_run_returncode
 
         with (
-            patch("superbuild.main.shutil.which", return_value="/usr/bin/charmcraft"),
-            patch("superbuild.main._parse_build_context",
+            patch("charmbuild.main.shutil.which", return_value="/usr/bin/charmcraft"),
+            patch("charmbuild.main._parse_build_context",
                   side_effect=_make_parse_build_context_mock()),
-            patch("superbuild.main.subprocess.run", return_value=result_mock) as mock_run,
-            patch("superbuild.main.copy_context_to_temp") as mock_copy_ctx,
-            patch("superbuild.main.copy_charm_files") as mock_copy_charm,
-            patch("superbuild.main.charm_name_from_yaml", return_value="my-charm"),
-            patch("superbuild.main.move_generated_lib"),
-            patch.object(sys, "argv", ["superbuild"] + argv),
+            patch("charmbuild.main.subprocess.run", return_value=result_mock) as mock_run,
+            patch("charmbuild.main.copy_context_to_temp") as mock_copy_ctx,
+            patch("charmbuild.main.copy_charm_files") as mock_copy_charm,
+            patch("charmbuild.main.charm_name_from_yaml", return_value="my-charm"),
+            patch("charmbuild.main.move_generated_lib"),
+            patch.object(sys, "argv", ["charmbuild"] + argv),
             pytest.raises(SystemExit) as exc_info,
         ):
             main()
@@ -164,16 +164,16 @@ class TestMain:
         result_mock.returncode = 0
 
         with (
-            patch("superbuild.main.shutil.which", return_value=None),
-            patch("superbuild.main._parse_build_context",
+            patch("charmbuild.main.shutil.which", return_value=None),
+            patch("charmbuild.main._parse_build_context",
                   side_effect=_make_parse_build_context_mock()),
-            patch("superbuild.main.subprocess.run", return_value=result_mock),
-            patch("superbuild.main.copy_context_to_temp"),
-            patch("superbuild.main.copy_charm_files"),
-            patch("superbuild.main.charm_name_from_yaml", return_value=None),
-            patch("superbuild.main.move_generated_lib"),
-            patch("superbuild.main._install_charmcraft") as mock_install,
-            patch.object(sys, "argv", ["superbuild", "pack"]),
+            patch("charmbuild.main.subprocess.run", return_value=result_mock),
+            patch("charmbuild.main.copy_context_to_temp"),
+            patch("charmbuild.main.copy_charm_files"),
+            patch("charmbuild.main.charm_name_from_yaml", return_value=None),
+            patch("charmbuild.main.move_generated_lib"),
+            patch("charmbuild.main._install_charmcraft") as mock_install,
+            patch.object(sys, "argv", ["charmbuild", "pack"]),
             pytest.raises(SystemExit),
         ):
             main()
@@ -185,16 +185,16 @@ class TestMain:
         result_mock.returncode = 0
 
         with (
-            patch("superbuild.main.shutil.which", return_value="/usr/bin/charmcraft"),
-            patch("superbuild.main._parse_build_context",
+            patch("charmbuild.main.shutil.which", return_value="/usr/bin/charmcraft"),
+            patch("charmbuild.main._parse_build_context",
                   side_effect=_make_parse_build_context_mock()),
-            patch("superbuild.main.subprocess.run", return_value=result_mock),
-            patch("superbuild.main.copy_context_to_temp"),
-            patch("superbuild.main.copy_charm_files"),
-            patch("superbuild.main.charm_name_from_yaml", return_value=None),
-            patch("superbuild.main.move_generated_lib"),
-            patch("superbuild.main._install_charmcraft") as mock_install,
-            patch.object(sys, "argv", ["superbuild", "pack"]),
+            patch("charmbuild.main.subprocess.run", return_value=result_mock),
+            patch("charmbuild.main.copy_context_to_temp"),
+            patch("charmbuild.main.copy_charm_files"),
+            patch("charmbuild.main.charm_name_from_yaml", return_value=None),
+            patch("charmbuild.main.move_generated_lib"),
+            patch("charmbuild.main._install_charmcraft") as mock_install,
+            patch.object(sys, "argv", ["charmbuild", "pack"]),
             pytest.raises(SystemExit),
         ):
             main()
@@ -218,16 +218,16 @@ class TestMain:
         (charm_dir / "charmcraft.yaml").write_text("name: my-charm\n")
 
         with (
-            patch("superbuild.main.shutil.which", return_value="/usr/bin/charmcraft"),
-            patch("superbuild.main._parse_build_context",
+            patch("charmbuild.main.shutil.which", return_value="/usr/bin/charmcraft"),
+            patch("charmbuild.main._parse_build_context",
                   return_value=(tmp_path, Path("my-charm"), Path("."), ["pack"])),
-            patch("superbuild.main.subprocess.run", return_value=MagicMock(returncode=0)),
-            patch("superbuild.main.copy_context_to_temp") as mock_copy_ctx,
-            patch("superbuild.main.copy_charm_files"),
-            patch("superbuild.main.charm_name_from_yaml", return_value="my-charm"),
-            patch("superbuild.main.move_generated_lib"),
-            patch("superbuild.main.Path.cwd", return_value=tmp_path),
-            patch.object(sys, "argv", ["superbuild", "--project-dir", "my-charm", "pack"]),
+            patch("charmbuild.main.subprocess.run", return_value=MagicMock(returncode=0)),
+            patch("charmbuild.main.copy_context_to_temp") as mock_copy_ctx,
+            patch("charmbuild.main.copy_charm_files"),
+            patch("charmbuild.main.charm_name_from_yaml", return_value="my-charm"),
+            patch("charmbuild.main.move_generated_lib"),
+            patch("charmbuild.main.Path.cwd", return_value=tmp_path),
+            patch.object(sys, "argv", ["charmbuild", "--project-dir", "my-charm", "pack"]),
             pytest.raises(SystemExit),
         ):
             main()

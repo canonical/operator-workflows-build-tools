@@ -1,6 +1,6 @@
-# superbuild
+# charmbuild
 
-`superbuild` is a thin Python wrapper around [charmcraft](https://juju.is/docs/sdk/charmcraft).
+`charmbuild` is a thin Python wrapper around [charmcraft](https://juju.is/docs/sdk/charmcraft).
 It ensures `charmcraft` is installed on the machine and transparently forwards all arguments to it,
 with one extra convenience: a `--build-context` option that lets you supply an external directory
 of source files to include in the build without modifying your project tree.
@@ -22,29 +22,29 @@ of source files to include in the build without modifying your project tree.
 ## Installation
 
 ```bash
-pip install ./superbuild
+pip install ./charmbuild
 ```
 
 Or, for development:
 
 ```bash
-pip install -e ./superbuild
+pip install -e ./charmbuild
 ```
 
 ## Usage
 
 ```
-superbuild [--build-context <dir>] <charmcraft command and args>
+charmbuild [--build-context <dir>] <charmcraft command and args>
 ```
 
 ### Without `--build-context`
 
-`superbuild` behaves exactly like calling `charmcraft` directly:
+`charmbuild` behaves exactly like calling `charmcraft` directly:
 
 ```bash
-superbuild pack
-superbuild version
-superbuild upload my-charm_ubuntu-22.04-amd64.charm
+charmbuild pack
+charmbuild version
+charmbuild upload my-charm_ubuntu-22.04-amd64.charm
 ```
 
 ### With `--build-context`
@@ -54,7 +54,7 @@ working directory into a temporary build directory. This is useful when your sou
 separately from your charm metadata.
 
 ```bash
-superbuild --build-context ./src pack
+charmbuild --build-context ./src pack
 ```
 
 What happens internally:
