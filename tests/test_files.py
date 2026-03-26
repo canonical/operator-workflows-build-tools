@@ -56,7 +56,14 @@ class TestCopyContextToTemp:
         charm_dir = context / "my-charm-operator"
         charm_dir.mkdir(parents=True)
         charm_yaml = charm_dir / "charmcraft.yaml"
-        charm_yaml.write_text("name: my-charm\nparts:\n  charm:\n    plugin: uv\n")
+        charm_yaml.write_text(
+            "name: my-charm\n"
+            "parts:\n"
+            "  charm:\n"
+            "    plugin: uv\n"
+            "    build-environment:\n"
+            "      - UV_WORKING_DIR: .\n"
+        )
         dest = tmp_path / "dest"
         dest.mkdir()
 
@@ -65,10 +72,51 @@ class TestCopyContextToTemp:
         data = yaml.safe_load((dest / "charmcraft.yaml").read_text())
         build_env = data["parts"]["charm"]["build-environment"]
         assert {"UV_WORKING_DIR": "my-charm-operator"} in build_env
-        override = data["parts"]["charm"]["override-build"]
-        assert "craftctl default" in override
-        assert "$CRAFT_PART_BUILD/$UV_WORKING_DIR/src $CRAFT_PART_INSTALL/src" in override
-        assert "$CRAFT_PART_BUILD/$UV_WORKING_DIR/lib $CRAFT_PART_INSTALL/lib" in override
+        assert "override-build" not in data["parts"]["charm"]
+
+    def test_no_patch_when_no_uv_plugin_part(self, tmp_path):
+        context = tmp_path / "repo"
+        charm_dir = context / "sub"
+        charm_dir.mkdir(parents=True)
+        charm_yaml = charm_dir / "charmcraft.yaml"
+        charm_yaml.write_text(
+            "name: my-charm\n"
+            "parts:\n"
+            "  charm:\n"
+            "    plugin: charm\n"
+            "    build-environment:\n"
+            "      - UV_WORKING_DIR: .\n"
+        )
+        dest = tmp_path / "dest"
+        dest.mkdir()
+
+        copy_context_to_temp(context, dest, charm_yaml)
+
+        data = yaml.safe_load((dest / "charmcraft.yaml").read_text())
+        build_env = data["parts"]["charm"]["build-environment"]
+        assert {"UV_WORKING_DIR": "."} in build_env
+
+    def test_no_patch_when_uv_working_dir_not_dot(self, tmp_path):
+        context = tmp_path / "repo"
+        charm_dir = context / "sub"
+        charm_dir.mkdir(parents=True)
+        charm_yaml = charm_dir / "charmcraft.yaml"
+        charm_yaml.write_text(
+            "name: my-charm\n"
+            "parts:\n"
+            "  charm:\n"
+            "    plugin: uv\n"
+            "    build-environment:\n"
+            "      - UV_WORKING_DIR: already-set\n"
+        )
+        dest = tmp_path / "dest"
+        dest.mkdir()
+
+        copy_context_to_temp(context, dest, charm_yaml)
+
+        data = yaml.safe_load((dest / "charmcraft.yaml").read_text())
+        build_env = data["parts"]["charm"]["build-environment"]
+        assert {"UV_WORKING_DIR": "already-set"} in build_env
 
     def test_no_patch_when_charm_yaml_at_context_root(self, tmp_path):
         context = tmp_path / "repo"
@@ -92,8 +140,10 @@ class TestCopyContextToTemp:
             "name: my-charm\n"
             "parts:\n"
             "  charm:\n"
+            "    plugin: uv\n"
             "    build-environment:\n"
             "      - SOME_VAR: foo\n"
+            "      - UV_WORKING_DIR: .\n"
         )
         dest = tmp_path / "dest"
         dest.mkdir()

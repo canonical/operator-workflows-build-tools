@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def _patch_charmcraft_yaml(yaml_path: Path, rel_path: Path) -> None:
-    """Add UV_WORKING_DIR and override-build to the charm part in a charmcraft.yaml."""
+    """Update UV_WORKING_DIR in the uv plugin part of a charmcraft.yaml, if currently set to '.'."""
     if yaml is None:
         return
 
@@ -25,21 +25,28 @@ def _patch_charmcraft_yaml(yaml_path: Path, rel_path: Path) -> None:
     with yaml_path.open() as f:
         data = yaml.safe_load(f) or {}
 
-    parts = data.setdefault("parts", {})
-    charm = parts.setdefault("charm", {})
-
-    build_env = charm.get("build-environment", [])
-    build_env = [e for e in build_env if not (isinstance(e, dict) and "UV_WORKING_DIR" in e)]
-    build_env.append({"UV_WORKING_DIR": rel_str})
-    charm["build-environment"] = build_env
-
-    charm["override-build"] = (
-        "craftctl default\n"
-        "cp --archive --recursive --reflink=auto"
-        " $CRAFT_PART_BUILD/$UV_WORKING_DIR/src $CRAFT_PART_INSTALL/src\n"
-        "cp --archive --recursive --reflink=auto"
-        " $CRAFT_PART_BUILD/$UV_WORKING_DIR/lib $CRAFT_PART_INSTALL/lib\n"
+    parts = data.get("parts", {})
+    uv_part = next(
+        (p for p in parts.values() if isinstance(p, dict) and p.get("plugin") == "uv"),
+        None,
     )
+    if uv_part is None:
+        return
+
+    build_env = uv_part.get("build-environment", [])
+    patched = False
+    new_build_env = []
+    for entry in build_env:
+        if isinstance(entry, dict) and entry.get("UV_WORKING_DIR") == ".":
+            new_build_env.append({"UV_WORKING_DIR": rel_str})
+            patched = True
+        else:
+            new_build_env.append(entry)
+
+    if not patched:
+        return
+
+    uv_part["build-environment"] = new_build_env
 
     with yaml_path.open("w") as f:
         yaml.dump(data, f, default_flow_style=False)
