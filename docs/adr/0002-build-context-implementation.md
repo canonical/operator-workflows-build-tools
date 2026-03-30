@@ -8,7 +8,7 @@ Accepted
 
 ## Context
 
-There are multiple ways to implement the build context funcionality.
+There are multiple ways to implement the build context functionality.
 
 ## Decision
 
