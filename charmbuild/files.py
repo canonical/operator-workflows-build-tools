@@ -60,6 +60,12 @@ def copy_context_to_temp(abs_context_dir: Path, tmp_path: Path, charm_yaml: Path
                  abs_context_dir, tmp_path, charm_yaml)
     logger.debug("Resolved absolute context directory: %s", abs_context_dir)
 
+    for item in abs_context_dir.iterdir():
+        dest = tmp_path / item.name
+        if item.is_dir():
+            shutil.copytree(item, dest)
+        else:
+            shutil.copy2(item, dest)
     if charm_yaml.exists():
         shutil.copy2(charm_yaml, tmp_path / "charmcraft.yaml")
         try:
@@ -68,14 +74,7 @@ def copy_context_to_temp(abs_context_dir: Path, tmp_path: Path, charm_yaml: Path
         except ValueError:
             rel_path = Path(".")
         if rel_path != Path("."):
-            _patch_charmcraft_yaml(tmp_path / "charmcraft.yaml", rel_path)
-
-    for item in abs_context_dir.iterdir():
-        dest = tmp_path / item.name
-        if item.is_dir():
-            shutil.copytree(item, dest)
-        else:
-            shutil.copy2(item, dest)
+            _patch_charmcraft_yaml(tmp_path / "charmcraft.yaml", rel_path)    
 
 
 def move_generated_lib(tmp_path: Path, uv_working_dir: Path) -> None:
