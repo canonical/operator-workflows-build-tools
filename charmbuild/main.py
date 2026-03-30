@@ -76,7 +76,11 @@ def main() -> None:
 
         copy_charm_files(tmp_path, Path.cwd(), charm_name_from_yaml(charm_yaml))
         logger.debug("Running charmcraft: %s from %s", charmcraft_args, tmp_path)
-        subprocess.run(["charmcraft", "fetch-libs"], cwd=tmp_path)
+        try:
+            subprocess.run(["charmcraft", "fetch-libs"], cwd=tmp_path, check=True)
+        except subprocess.CalledProcessError as exc:
+            logger.error("`charmcraft fetch-libs` failed with exit code %s", exc.returncode)
+            sys.exit(exc.returncode)
         move_generated_lib(tmp_path, uv_working_dir)
         result = subprocess.run(["charmcraft"] + charmcraft_args, cwd=tmp_path)     
 
