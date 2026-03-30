@@ -36,7 +36,7 @@ def _install_charmcraft() -> None:
     )
 
 
-def _parse_build_context(argv: list[str]) -> tuple[Path, list[str]]:
+def _parse_build_context(argv: list[str]) -> tuple[Path, Path, Path, list[str]]:
     """Extract --build-context from argv, return (context_dir, remaining_args)."""
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--build-context", default=None)
@@ -70,7 +70,7 @@ def main() -> None:
         try:
             uv_working_dir = charm_yaml.parent.resolve().relative_to(abs_context_dir)
         except ValueError:
-            uv_working_dir = None
+            uv_working_dir = Path(".")
         logger.debug("UV working dir: %s", uv_working_dir)
         copy_context_to_temp(abs_context_dir, tmp_path, charm_yaml)
 
