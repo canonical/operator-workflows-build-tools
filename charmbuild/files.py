@@ -17,19 +17,20 @@ except ImportError:  # pragma: no cover
 logger = logging.getLogger(__name__)
 
 
-def _patch_charmcraft_yaml(yaml_path: Path, rel_path: Path) -> None:
-    """Update UV_WORKING_DIR in the uv plugin part of a charmcraft.yaml, if currently set to '.'."""
-    if yaml is None:
-        return
+def _compute_patched_yaml(data: dict, rel_str: str) -> "Optional[str]":
+    """Return patched YAML string with UV_WORKING_DIR updated, or None if no changes are needed.
 
-    rel_str = str(rel_path)
-    with yaml_path.open() as f:
-        data = yaml.safe_load(f) or {}
+    Patches the single uv-plugin part's build-environment, replacing any UV_WORKING_DIR set
+    to '.' with rel_str. Returns None when there is not exactly one uv part, when no
+    UV_WORKING_DIR entry equals '.', or when yaml is unavailable.
+    """
+    if yaml is None:
+        return None
 
     parts = data.get("parts", {})
     uv_parts = [p for p in parts.values() if isinstance(p, dict) and p.get("plugin") == "uv"]
     if len(uv_parts) != 1:
-        return
+        return None
     uv_part = uv_parts[0]
 
     build_env = uv_part.get("build-environment", [])
@@ -43,18 +44,36 @@ def _patch_charmcraft_yaml(yaml_path: Path, rel_path: Path) -> None:
             new_build_env.append(entry)
 
     if not patched:
-        return
+        return None
 
     uv_part["build-environment"] = new_build_env
-
-    with yaml_path.open("w") as f:
-        yaml.dump(data, f, default_flow_style=False)
-
-    logger.debug("Patched charmcraft.yaml (UV_WORKING_DIR=%s):\n%s", rel_str, yaml_path.read_text())
+    return yaml.dump(data, default_flow_style=False)
 
 
-def copy_context_to_temp(abs_context_dir: Path, tmp_path: Path, charm_yaml: Path) -> None:
-    """Copy charmcraft.yaml (if present) and all files from context_dir into tmp_path."""
+def compute_patched_yaml(charm_yaml: Path, rel_path: Path) -> "Optional[str]":
+    """Load charm_yaml and return patched YAML content, or None if no patch is needed.
+
+    Returns None immediately when rel_path is '.' (charm is at the context root)
+    since no UV_WORKING_DIR update would be needed.
+    """
+    if rel_path == Path(".") or yaml is None or not charm_yaml.exists():
+        return None
+    with charm_yaml.open() as f:
+        data = yaml.safe_load(f) or {}
+    return _compute_patched_yaml(data, str(rel_path))
+
+
+def copy_context_to_temp(
+    abs_context_dir: Path,
+    tmp_path: Path,
+    charm_yaml: Path,
+    patched_yaml_content: "Optional[str]" = None,
+) -> None:
+    """Copy charmcraft.yaml (if present) and all files from context_dir into tmp_path.
+
+    If patched_yaml_content is provided, it is written as charmcraft.yaml in tmp_path
+    instead of copying the original file.
+    """
     logger.debug(
         "Copying context to temp directory: abs_context_dir=%s, tmp_path=%s, charm_yaml=%s",
         abs_context_dir, tmp_path, charm_yaml,
@@ -68,14 +87,12 @@ def copy_context_to_temp(abs_context_dir: Path, tmp_path: Path, charm_yaml: Path
         else:
             shutil.copy2(item, dest)
     if charm_yaml.exists():
-        shutil.copy2(charm_yaml, tmp_path / "charmcraft.yaml")
-        try:
-            rel_path = charm_yaml.parent.relative_to(abs_context_dir)
-            logger.debug("Charm YAML relative path: %s", rel_path)
-        except ValueError:
-            rel_path = Path(".")
-        if rel_path != Path("."):
-            _patch_charmcraft_yaml(tmp_path / "charmcraft.yaml", rel_path)
+        dest_yaml = tmp_path / "charmcraft.yaml"
+        if patched_yaml_content is not None:
+            dest_yaml.write_text(patched_yaml_content)
+            logger.debug("Wrote patched charmcraft.yaml:\n%s", patched_yaml_content)
+        else:
+            shutil.copy2(charm_yaml, dest_yaml)
 
 
 def move_generated_lib(tmp_path: Path, uv_working_dir: Path) -> None:

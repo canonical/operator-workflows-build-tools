@@ -15,6 +15,7 @@ from pathlib import Path
 
 from charmbuild.files import (
     charm_name_from_yaml,
+    compute_patched_yaml,
     copy_charm_files,
     copy_context_to_temp,
     move_generated_lib,
@@ -62,19 +63,29 @@ def main() -> None:
     context_dir, project_dir, output, charmcraft_args = _parse_build_context(argv)
     logger.warning("Output argument is ignored. Set to %s.", output)
 
+    charm_yaml = Path.cwd() / project_dir / "charmcraft.yaml"
+    logger.debug("Charm YAML path: %s", charm_yaml)
+    abs_context_dir = context_dir.resolve()
+    logger.debug("Resolved absolute context directory: %s", abs_context_dir)
+    try:
+        uv_working_dir = charm_yaml.parent.resolve().relative_to(abs_context_dir)
+    except ValueError:
+        uv_working_dir = Path(".")
+    logger.debug("UV working dir: %s", uv_working_dir)
+
+    patched_yaml_content = compute_patched_yaml(charm_yaml, uv_working_dir)
+
+    if patched_yaml_content is None:
+        logger.debug("No YAML patch needed; running charmcraft directly from %s", charm_yaml.parent)
+        result = subprocess.run(
+            ["charmcraft"] + charmcraft_args, cwd=charm_yaml.parent, env=os.environ, check=False
+        )
+        sys.exit(result.returncode)
+
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
 
-        charm_yaml = Path.cwd() / project_dir / "charmcraft.yaml"
-        logger.debug("Charm YAML path: %s", charm_yaml)
-        abs_context_dir = context_dir.resolve()
-        logger.debug("Resolved absolute context directory: %s", abs_context_dir)
-        try:
-            uv_working_dir = charm_yaml.parent.resolve().relative_to(abs_context_dir)
-        except ValueError:
-            uv_working_dir = Path(".")
-        logger.debug("UV working dir: %s", uv_working_dir)
-        copy_context_to_temp(abs_context_dir, tmp_path, charm_yaml)
+        copy_context_to_temp(abs_context_dir, tmp_path, charm_yaml, patched_yaml_content)
 
         copy_charm_files(tmp_path, Path.cwd(), charm_name_from_yaml(charm_yaml))
         logger.debug("Running charmcraft: %s from %s", charmcraft_args, tmp_path)

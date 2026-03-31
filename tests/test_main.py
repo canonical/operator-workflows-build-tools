@@ -123,7 +123,11 @@ def _make_parse_build_context_mock():
 
 class TestMain:
     def _run_main(self, argv, mock_run_returncode=0):
-        """Helper that patches all side-effects and runs main() with given argv."""
+        """Helper that patches all side-effects and runs main() with given argv.
+
+        Patches compute_patched_yaml to return a non-None string so the temp-dir
+        path is always taken, keeping these tests focused on that flow.
+        """
         result_mock = MagicMock()
         result_mock.returncode = mock_run_returncode
 
@@ -131,6 +135,7 @@ class TestMain:
             patch("charmbuild.main.shutil.which", return_value="/usr/bin/charmcraft"),
             patch("charmbuild.main._parse_build_context",
                   side_effect=_make_parse_build_context_mock()),
+            patch("charmbuild.main.compute_patched_yaml", return_value="name: my-charm\n"),
             patch("charmbuild.main.subprocess.run", return_value=result_mock) as mock_run,
             patch("charmbuild.main.copy_context_to_temp") as mock_copy_ctx,
             patch("charmbuild.main.copy_charm_files") as mock_copy_charm,
@@ -203,6 +208,51 @@ class TestMain:
         for call in mock_run.call_args_list:
             assert call[1].get("env") is os.environ
 
+    def test_patched_yaml_passed_to_copy_context(self):
+        patched_content = "name: my-charm\npatched: true\n"
+        result_mock = MagicMock()
+        result_mock.returncode = 0
+        with (
+            patch("charmbuild.main.shutil.which", return_value="/usr/bin/charmcraft"),
+            patch("charmbuild.main._parse_build_context",
+                  side_effect=_make_parse_build_context_mock()),
+            patch("charmbuild.main.compute_patched_yaml", return_value=patched_content),
+            patch("charmbuild.main.subprocess.run", return_value=result_mock),
+            patch("charmbuild.main.copy_context_to_temp") as mock_copy_ctx,
+            patch("charmbuild.main.copy_charm_files"),
+            patch("charmbuild.main.charm_name_from_yaml", return_value=None),
+            patch("charmbuild.main.move_generated_lib"),
+            patch.object(sys, "argv", ["charmbuild", "pack"]),
+            pytest.raises(SystemExit),
+        ):
+            main()
+
+        assert mock_copy_ctx.call_args[0][3] == patched_content
+
+    def test_runs_directly_when_no_patch_needed(self):
+        result_mock = MagicMock()
+        result_mock.returncode = 0
+        with (
+            patch("charmbuild.main.shutil.which", return_value="/usr/bin/charmcraft"),
+            patch("charmbuild.main._parse_build_context",
+                  side_effect=_make_parse_build_context_mock()),
+            patch("charmbuild.main.compute_patched_yaml", return_value=None),
+            patch("charmbuild.main.subprocess.run", return_value=result_mock) as mock_run,
+            patch("charmbuild.main.copy_context_to_temp") as mock_copy_ctx,
+            patch("charmbuild.main.copy_charm_files") as mock_copy_charm,
+            patch("charmbuild.main.charm_name_from_yaml", return_value=None),
+            patch("charmbuild.main.move_generated_lib"),
+            patch.object(sys, "argv", ["charmbuild", "pack"]),
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            main()
+
+        assert exc_info.value.code == 0
+        mock_copy_ctx.assert_not_called()
+        mock_copy_charm.assert_not_called()
+        cmd = mock_run.call_args[0][0]
+        assert cmd[0] == "charmcraft"
+
     def test_copy_context_and_charm_files_called(self):
         _, _, mock_copy_ctx, mock_copy_charm = self._run_main(["pack"])
         mock_copy_ctx.assert_called_once()
@@ -223,6 +273,7 @@ class TestMain:
             patch("charmbuild.main.shutil.which", return_value="/usr/bin/charmcraft"),
             patch("charmbuild.main._parse_build_context",
                   return_value=(tmp_path, Path("my-charm"), Path("."), ["pack"])),
+            patch("charmbuild.main.compute_patched_yaml", return_value="name: my-charm\n"),
             patch("charmbuild.main.subprocess.run", return_value=MagicMock(returncode=0)),
             patch("charmbuild.main.copy_context_to_temp") as mock_copy_ctx,
             patch("charmbuild.main.copy_charm_files"),

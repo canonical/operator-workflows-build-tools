@@ -7,7 +7,82 @@ import pytest
 import yaml
 from pathlib import Path
 
-from charmbuild.files import copy_context_to_temp, charm_name_from_yaml, copy_charm_files, move_generated_lib
+from charmbuild.files import (
+    copy_context_to_temp,
+    charm_name_from_yaml,
+    compute_patched_yaml,
+    copy_charm_files,
+    move_generated_lib,
+    _compute_patched_yaml,
+)
+
+
+
+# ---------------------------------------------------------------------------
+# _compute_patched_yaml
+# ---------------------------------------------------------------------------
+
+class TestComputePatchedYaml:
+    def _make_data(self, uv_working_dir=".", extra_parts=None):
+        data = {
+            "name": "my-charm",
+            "parts": {
+                "charm": {
+                    "plugin": "uv",
+                    "build-environment": [{"UV_WORKING_DIR": uv_working_dir}],
+                }
+            },
+        }
+        if extra_parts:
+            data["parts"].update(extra_parts)
+        return data
+
+    def test_returns_patched_yaml_string(self):
+        data = self._make_data(uv_working_dir=".")
+        result = _compute_patched_yaml(data, "my-charm-operator")
+        assert result is not None
+        parsed = yaml.safe_load(result)
+        build_env = parsed["parts"]["charm"]["build-environment"]
+        assert {"UV_WORKING_DIR": "my-charm-operator"} in build_env
+
+    def test_returns_none_when_uv_working_dir_not_dot(self):
+        data = self._make_data(uv_working_dir="already-set")
+        assert _compute_patched_yaml(data, "sub") is None
+
+    def test_returns_none_when_no_uv_part(self):
+        data = {"parts": {"charm": {"plugin": "charm"}}}
+        assert _compute_patched_yaml(data, "sub") is None
+
+    def test_returns_none_when_multiple_uv_parts(self):
+        data = self._make_data()
+        data["parts"]["extra"] = {
+            "plugin": "uv",
+            "build-environment": [{"UV_WORKING_DIR": "."}],
+        }
+        assert _compute_patched_yaml(data, "sub") is None
+
+    def test_preserves_other_build_environment_entries(self):
+        data = {
+            "parts": {
+                "charm": {
+                    "plugin": "uv",
+                    "build-environment": [
+                        {"SOME_VAR": "foo"},
+                        {"UV_WORKING_DIR": "."},
+                    ],
+                }
+            }
+        }
+        result = _compute_patched_yaml(data, "sub")
+        assert result is not None
+        parsed = yaml.safe_load(result)
+        build_env = parsed["parts"]["charm"]["build-environment"]
+        assert {"SOME_VAR": "foo"} in build_env
+        assert {"UV_WORKING_DIR": "sub"} in build_env
+
+    def test_returns_none_when_no_build_environment(self):
+        data = {"parts": {"charm": {"plugin": "uv"}}}
+        assert _compute_patched_yaml(data, "sub") is None
 
 
 # ---------------------------------------------------------------------------
@@ -66,8 +141,9 @@ class TestCopyContextToTemp:
         )
         dest = tmp_path / "dest"
         dest.mkdir()
+        patched = compute_patched_yaml(charm_yaml, Path("my-charm-operator"))
 
-        copy_context_to_temp(context, dest, charm_yaml)
+        copy_context_to_temp(context, dest, charm_yaml, patched)
 
         data = yaml.safe_load((dest / "charmcraft.yaml").read_text())
         build_env = data["parts"]["charm"]["build-environment"]
@@ -93,8 +169,9 @@ class TestCopyContextToTemp:
         )
         dest = tmp_path / "dest"
         dest.mkdir()
+        patched = compute_patched_yaml(charm_yaml, Path("sub"))  # returns None
 
-        copy_context_to_temp(context, dest, charm_yaml)
+        copy_context_to_temp(context, dest, charm_yaml, patched)
 
         data = yaml.safe_load((dest / "charmcraft.yaml").read_text())
         assert {"UV_WORKING_DIR": "."} in data["parts"]["charm"]["build-environment"]
@@ -115,8 +192,9 @@ class TestCopyContextToTemp:
         )
         dest = tmp_path / "dest"
         dest.mkdir()
+        patched = compute_patched_yaml(charm_yaml, Path("sub"))  # returns None
 
-        copy_context_to_temp(context, dest, charm_yaml)
+        copy_context_to_temp(context, dest, charm_yaml, patched)
 
         data = yaml.safe_load((dest / "charmcraft.yaml").read_text())
         build_env = data["parts"]["charm"]["build-environment"]
@@ -137,8 +215,9 @@ class TestCopyContextToTemp:
         )
         dest = tmp_path / "dest"
         dest.mkdir()
+        patched = compute_patched_yaml(charm_yaml, Path("sub"))  # returns None
 
-        copy_context_to_temp(context, dest, charm_yaml)
+        copy_context_to_temp(context, dest, charm_yaml, patched)
 
         data = yaml.safe_load((dest / "charmcraft.yaml").read_text())
         build_env = data["parts"]["charm"]["build-environment"]
@@ -154,7 +233,7 @@ class TestCopyContextToTemp:
 
         copy_context_to_temp(context, dest, charm_yaml)
 
-        # rel_path == Path("."), so no patching.
+        # patched_yaml_content=None (default), yaml copied as-is.
         assert (dest / "charmcraft.yaml").read_text() == "name: my-charm\n"
 
     def test_patch_preserves_existing_build_environment_entries(self, tmp_path):
@@ -173,8 +252,9 @@ class TestCopyContextToTemp:
         )
         dest = tmp_path / "dest"
         dest.mkdir()
+        patched = compute_patched_yaml(charm_yaml, Path("sub"))
 
-        copy_context_to_temp(context, dest, charm_yaml)
+        copy_context_to_temp(context, dest, charm_yaml, patched)
 
         data = yaml.safe_load((dest / "charmcraft.yaml").read_text())
         build_env = data["parts"]["charm"]["build-environment"]
