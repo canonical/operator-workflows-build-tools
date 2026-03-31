@@ -29,12 +29,6 @@ def _peek_verbose(argv: list[str]) -> bool:
     return namespace.verbose
 
 
-def _install_charmcraft() -> None:
-    subprocess.run(
-        ["sudo", "snap", "install", "charmcraft", "--classic"],
-        check=True,
-    )
-
 
 def _parse_build_context(argv: list[str]) -> tuple[Path, Path, Path, list[str]]:
     """Extract --build-context from argv, return (context_dir, remaining_args)."""
@@ -55,7 +49,8 @@ def main() -> None:
     logging.getLogger().setLevel(log_level)
 
     if shutil.which("charmcraft") is None:
-        _install_charmcraft()
+        logger.error("charmcraft is not installed. Please install it before running charmbuild.")
+        sys.exit(1)
 
     context_dir, project_dir, output, charmcraft_args = _parse_build_context(argv)
     logger.warning("Output argument is ignored. Set to %s.", output)

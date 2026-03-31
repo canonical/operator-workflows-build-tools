@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from charmbuild.main import _install_charmcraft, _parse_build_context, _peek_verbose, main
+from charmbuild.main import _parse_build_context, _peek_verbose, main
 
 
 # ---------------------------------------------------------------------------
@@ -39,17 +39,37 @@ class TestPeekVerbose:
 
 
 # ---------------------------------------------------------------------------
-# _install_charmcraft
+# charmcraft presence check
 # ---------------------------------------------------------------------------
 
-class TestInstallCharmcraft:
-    def test_runs_snap_install(self):
-        with patch("charmbuild.main.subprocess.run") as mock_run:
-            _install_charmcraft()
-            mock_run.assert_called_once_with(
-                ["sudo", "snap", "install", "charmcraft", "--classic"],
-                check=True,
-            )
+class TestCharmcraftCheck:
+    def test_exits_when_charmcraft_not_found(self):
+        with (
+            patch("charmbuild.main.shutil.which", return_value=None),
+            patch.object(sys, "argv", ["charmbuild", "pack"]),
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            main()
+
+        assert exc_info.value.code == 1
+
+    def test_does_not_exit_when_charmcraft_present(self):
+        result_mock = MagicMock()
+        result_mock.returncode = 0
+
+        with (
+            patch("charmbuild.main.shutil.which", return_value="/usr/bin/charmcraft"),
+            patch("charmbuild.main._parse_build_context",
+                  side_effect=_make_parse_build_context_mock()),
+            patch("charmbuild.main.subprocess.run", return_value=result_mock),
+            patch("charmbuild.main.copy_context_to_temp"),
+            patch("charmbuild.main.copy_charm_files"),
+            patch("charmbuild.main.charm_name_from_yaml", return_value=None),
+            patch("charmbuild.main.move_generated_lib"),
+            patch.object(sys, "argv", ["charmbuild", "pack"]),
+            pytest.raises(SystemExit),
+        ):
+            main()
 
 
 # ---------------------------------------------------------------------------
@@ -159,28 +179,7 @@ class TestMain:
         cmd = mock_run.call_args[0][0]
         assert "-v" in cmd
 
-    def test_installs_charmcraft_when_not_found(self):
-        result_mock = MagicMock()
-        result_mock.returncode = 0
-
-        with (
-            patch("charmbuild.main.shutil.which", return_value=None),
-            patch("charmbuild.main._parse_build_context",
-                  side_effect=_make_parse_build_context_mock()),
-            patch("charmbuild.main.subprocess.run", return_value=result_mock),
-            patch("charmbuild.main.copy_context_to_temp"),
-            patch("charmbuild.main.copy_charm_files"),
-            patch("charmbuild.main.charm_name_from_yaml", return_value=None),
-            patch("charmbuild.main.move_generated_lib"),
-            patch("charmbuild.main._install_charmcraft") as mock_install,
-            patch.object(sys, "argv", ["charmbuild", "pack"]),
-            pytest.raises(SystemExit),
-        ):
-            main()
-
-        mock_install.assert_called_once()
-
-    def test_does_not_install_when_charmcraft_present(self):
+    def test_does_not_exit_when_charmcraft_present_in_main(self):
         result_mock = MagicMock()
         result_mock.returncode = 0
 
@@ -193,13 +192,10 @@ class TestMain:
             patch("charmbuild.main.copy_charm_files"),
             patch("charmbuild.main.charm_name_from_yaml", return_value=None),
             patch("charmbuild.main.move_generated_lib"),
-            patch("charmbuild.main._install_charmcraft") as mock_install,
             patch.object(sys, "argv", ["charmbuild", "pack"]),
             pytest.raises(SystemExit),
         ):
             main()
-
-        mock_install.assert_not_called()
 
     def test_copy_context_and_charm_files_called(self):
         _, _, mock_copy_ctx, mock_copy_charm = self._run_main(["pack"])
