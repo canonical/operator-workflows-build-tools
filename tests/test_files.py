@@ -74,6 +74,32 @@ class TestCopyContextToTemp:
         assert {"UV_WORKING_DIR": "my-charm-operator"} in build_env
         assert "override-build" not in data["parts"]["charm"]
 
+    def test_no_patch_when_multiple_uv_plugin_parts(self, tmp_path):
+        context = tmp_path / "repo"
+        charm_dir = context / "sub"
+        charm_dir.mkdir(parents=True)
+        charm_yaml = charm_dir / "charmcraft.yaml"
+        charm_yaml.write_text(
+            "name: my-charm\n"
+            "parts:\n"
+            "  charm:\n"
+            "    plugin: uv\n"
+            "    build-environment:\n"
+            "      - UV_WORKING_DIR: .\n"
+            "  extra:\n"
+            "    plugin: uv\n"
+            "    build-environment:\n"
+            "      - UV_WORKING_DIR: .\n"
+        )
+        dest = tmp_path / "dest"
+        dest.mkdir()
+
+        copy_context_to_temp(context, dest, charm_yaml)
+
+        data = yaml.safe_load((dest / "charmcraft.yaml").read_text())
+        assert {"UV_WORKING_DIR": "."} in data["parts"]["charm"]["build-environment"]
+        assert {"UV_WORKING_DIR": "."} in data["parts"]["extra"]["build-environment"]
+
     def test_no_patch_when_no_uv_plugin_part(self, tmp_path):
         context = tmp_path / "repo"
         charm_dir = context / "sub"

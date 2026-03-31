@@ -26,12 +26,10 @@ def _patch_charmcraft_yaml(yaml_path: Path, rel_path: Path) -> None:
         data = yaml.safe_load(f) or {}
 
     parts = data.get("parts", {})
-    uv_part = next(
-        (p for p in parts.values() if isinstance(p, dict) and p.get("plugin") == "uv"),
-        None,
-    )
-    if uv_part is None:
+    uv_parts = [p for p in parts.values() if isinstance(p, dict) and p.get("plugin") == "uv"]
+    if len(uv_parts) != 1:
         return
+    uv_part = uv_parts[0]
 
     build_env = uv_part.get("build-environment", [])
     patched = False
