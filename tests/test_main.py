@@ -197,6 +197,12 @@ class TestMain:
         ):
             main()
 
+    def test_env_passed_to_charmcraft(self):
+        _, mock_run, _, _ = self._run_main(["pack"])
+        import os
+        for call in mock_run.call_args_list:
+            assert call[1].get("env") is os.environ
+
     def test_copy_context_and_charm_files_called(self):
         _, _, mock_copy_ctx, mock_copy_charm = self._run_main(["pack"])
         mock_copy_ctx.assert_called_once()

@@ -2,16 +2,23 @@
 
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
+"""Entry point for charmbuild: wraps charmcraft with build-context support."""
 
 import argparse
 import logging
+import os
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-from charmbuild.files import charm_name_from_yaml, copy_charm_files, copy_context_to_temp, move_generated_lib
+from charmbuild.files import (
+    charm_name_from_yaml,
+    copy_charm_files,
+    copy_context_to_temp,
+    move_generated_lib,
+)
 
 logging.basicConfig(format="%(name)s: %(message)s")
 
@@ -29,7 +36,6 @@ def _peek_verbose(argv: list[str]) -> bool:
     return namespace.verbose
 
 
-
 def _parse_build_context(argv: list[str]) -> tuple[Path, Path, Path, list[str]]:
     """Extract --build-context from argv, return (context_dir, remaining_args)."""
     parser = argparse.ArgumentParser(add_help=False)
@@ -44,6 +50,7 @@ def _parse_build_context(argv: list[str]) -> tuple[Path, Path, Path, list[str]]:
 
 
 def main() -> None:
+    """Run charmcraft with build-context staging and lib migration."""
     argv = sys.argv[1:]
     log_level = logging.DEBUG if _peek_verbose(argv) else logging.WARNING
     logging.getLogger().setLevel(log_level)
@@ -72,12 +79,14 @@ def main() -> None:
         copy_charm_files(tmp_path, Path.cwd(), charm_name_from_yaml(charm_yaml))
         logger.debug("Running charmcraft: %s from %s", charmcraft_args, tmp_path)
         try:
-            subprocess.run(["charmcraft", "fetch-libs"], cwd=tmp_path, check=True)
+            subprocess.run(["charmcraft", "fetch-libs"], cwd=tmp_path, env=os.environ, check=True)
         except subprocess.CalledProcessError as exc:
             logger.error("`charmcraft fetch-libs` failed with exit code %s", exc.returncode)
             sys.exit(exc.returncode)
         move_generated_lib(tmp_path, uv_working_dir)
-        result = subprocess.run(["charmcraft"] + charmcraft_args, cwd=tmp_path)     
+        result = subprocess.run(
+            ["charmcraft"] + charmcraft_args, cwd=tmp_path, env=os.environ, check=False
+        )
 
     sys.exit(result.returncode)
 

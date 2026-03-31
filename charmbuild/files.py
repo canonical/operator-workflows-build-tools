@@ -2,6 +2,7 @@
 
 # Copyright 2025 Canonical Ltd.
 # See LICENSE file for licensing details.
+"""File utilities for charmbuild: copying context, patching YAML, and moving build artefacts."""
 
 import logging
 import shutil
@@ -54,8 +55,10 @@ def _patch_charmcraft_yaml(yaml_path: Path, rel_path: Path) -> None:
 
 def copy_context_to_temp(abs_context_dir: Path, tmp_path: Path, charm_yaml: Path) -> None:
     """Copy charmcraft.yaml (if present) and all files from context_dir into tmp_path."""
-    logger.debug("Copying context to temp directory: abs_context_dir=%s, tmp_path=%s, charm_yaml=%s",
-                 abs_context_dir, tmp_path, charm_yaml)
+    logger.debug(
+        "Copying context to temp directory: abs_context_dir=%s, tmp_path=%s, charm_yaml=%s",
+        abs_context_dir, tmp_path, charm_yaml,
+    )
     logger.debug("Resolved absolute context directory: %s", abs_context_dir)
 
     for item in abs_context_dir.iterdir():
@@ -72,7 +75,7 @@ def copy_context_to_temp(abs_context_dir: Path, tmp_path: Path, charm_yaml: Path
         except ValueError:
             rel_path = Path(".")
         if rel_path != Path("."):
-            _patch_charmcraft_yaml(tmp_path / "charmcraft.yaml", rel_path)    
+            _patch_charmcraft_yaml(tmp_path / "charmcraft.yaml", rel_path)
 
 
 def move_generated_lib(tmp_path: Path, uv_working_dir: Path) -> None:
