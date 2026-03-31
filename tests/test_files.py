@@ -13,76 +13,87 @@ from charmbuild.files import (
     compute_patched_yaml,
     copy_charm_files,
     move_generated_lib,
-    _compute_patched_yaml,
 )
 
 
 
 # ---------------------------------------------------------------------------
-# _compute_patched_yaml
+# compute_patched_yaml
 # ---------------------------------------------------------------------------
 
 class TestComputePatchedYaml:
-    def _make_data(self, uv_working_dir=".", extra_parts=None):
-        data = {
-            "name": "my-charm",
-            "parts": {
-                "charm": {
-                    "plugin": "uv",
-                    "build-environment": [{"UV_WORKING_DIR": uv_working_dir}],
-                }
-            },
-        }
+    def _write_yaml(self, path: Path, uv_working_dir=".", extra_parts=None):
+        data = (
+            "name: my-charm\n"
+            "parts:\n"
+            "  charm:\n"
+            "    plugin: uv\n"
+            "    build-environment:\n"
+            f"      - UV_WORKING_DIR: {uv_working_dir}\n"
+        )
         if extra_parts:
-            data["parts"].update(extra_parts)
-        return data
+            for name, plugin in extra_parts.items():
+                data += (
+                    f"  {name}:\n"
+                    f"    plugin: {plugin}\n"
+                    "    build-environment:\n"
+                    "      - UV_WORKING_DIR: .\n"
+                )
+        path.write_text(data)
 
-    def test_returns_patched_yaml_string(self):
-        data = self._make_data(uv_working_dir=".")
-        result = _compute_patched_yaml(data, "my-charm-operator")
+    def test_returns_patched_yaml_string(self, tmp_path):
+        charm_yaml = tmp_path / "charmcraft.yaml"
+        self._write_yaml(charm_yaml)
+        result = compute_patched_yaml(charm_yaml, Path("my-charm-operator"))
         assert result is not None
         parsed = yaml.safe_load(result)
         build_env = parsed["parts"]["charm"]["build-environment"]
         assert {"UV_WORKING_DIR": "my-charm-operator"} in build_env
 
-    def test_returns_none_when_uv_working_dir_not_dot(self):
-        data = self._make_data(uv_working_dir="already-set")
-        assert _compute_patched_yaml(data, "sub") is None
+    def test_returns_none_when_uv_working_dir_not_dot(self, tmp_path):
+        charm_yaml = tmp_path / "charmcraft.yaml"
+        self._write_yaml(charm_yaml, uv_working_dir="already-set")
+        assert compute_patched_yaml(charm_yaml, Path("sub")) is None
 
-    def test_returns_none_when_no_uv_part(self):
-        data = {"parts": {"charm": {"plugin": "charm"}}}
-        assert _compute_patched_yaml(data, "sub") is None
+    def test_returns_none_when_no_uv_part(self, tmp_path):
+        charm_yaml = tmp_path / "charmcraft.yaml"
+        charm_yaml.write_text("parts:\n  charm:\n    plugin: charm\n")
+        assert compute_patched_yaml(charm_yaml, Path("sub")) is None
 
-    def test_returns_none_when_multiple_uv_parts(self):
-        data = self._make_data()
-        data["parts"]["extra"] = {
-            "plugin": "uv",
-            "build-environment": [{"UV_WORKING_DIR": "."}],
-        }
-        assert _compute_patched_yaml(data, "sub") is None
+    def test_returns_none_when_multiple_uv_parts(self, tmp_path):
+        charm_yaml = tmp_path / "charmcraft.yaml"
+        self._write_yaml(charm_yaml, extra_parts={"extra": "uv"})
+        assert compute_patched_yaml(charm_yaml, Path("sub")) is None
 
-    def test_preserves_other_build_environment_entries(self):
-        data = {
-            "parts": {
-                "charm": {
-                    "plugin": "uv",
-                    "build-environment": [
-                        {"SOME_VAR": "foo"},
-                        {"UV_WORKING_DIR": "."},
-                    ],
-                }
-            }
-        }
-        result = _compute_patched_yaml(data, "sub")
+    def test_returns_none_when_rel_path_is_dot(self, tmp_path):
+        charm_yaml = tmp_path / "charmcraft.yaml"
+        self._write_yaml(charm_yaml)
+        assert compute_patched_yaml(charm_yaml, Path(".")) is None
+
+    def test_returns_none_when_file_absent(self, tmp_path):
+        assert compute_patched_yaml(tmp_path / "charmcraft.yaml", Path("sub")) is None
+
+    def test_preserves_other_build_environment_entries(self, tmp_path):
+        charm_yaml = tmp_path / "charmcraft.yaml"
+        charm_yaml.write_text(
+            "parts:\n"
+            "  charm:\n"
+            "    plugin: uv\n"
+            "    build-environment:\n"
+            "      - SOME_VAR: foo\n"
+            "      - UV_WORKING_DIR: .\n"
+        )
+        result = compute_patched_yaml(charm_yaml, Path("sub"))
         assert result is not None
         parsed = yaml.safe_load(result)
         build_env = parsed["parts"]["charm"]["build-environment"]
         assert {"SOME_VAR": "foo"} in build_env
         assert {"UV_WORKING_DIR": "sub"} in build_env
 
-    def test_returns_none_when_no_build_environment(self):
-        data = {"parts": {"charm": {"plugin": "uv"}}}
-        assert _compute_patched_yaml(data, "sub") is None
+    def test_returns_none_when_no_build_environment(self, tmp_path):
+        charm_yaml = tmp_path / "charmcraft.yaml"
+        charm_yaml.write_text("parts:\n  charm:\n    plugin: uv\n")
+        assert compute_patched_yaml(charm_yaml, Path("sub")) is None
 
 
 # ---------------------------------------------------------------------------

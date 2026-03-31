@@ -17,15 +17,19 @@ except ImportError:  # pragma: no cover
 logger = logging.getLogger(__name__)
 
 
-def _compute_patched_yaml(data: dict, rel_str: str) -> "Optional[str]":
-    """Return patched YAML string with UV_WORKING_DIR updated, or None if no changes are needed.
+def compute_patched_yaml(charm_yaml: Path, rel_path: Path) -> "Optional[str]":
+    """Load charm_yaml and return patched YAML content, or None if no patch is needed.
 
-    Patches the single uv-plugin part's build-environment, replacing any UV_WORKING_DIR set
-    to '.' with rel_str. Returns None when there is not exactly one uv part, when no
-    UV_WORKING_DIR entry equals '.', or when yaml is unavailable.
+    Patches the single uv-plugin part's build-environment, replacing any UV_WORKING_DIR
+    set to '.' with the given rel_path. Returns None when rel_path is '.', when the file
+    does not exist, when there is not exactly one uv part, or when no UV_WORKING_DIR
+    entry equals '.'.
     """
-    if yaml is None:
+    if rel_path == Path(".") or yaml is None or not charm_yaml.exists():
         return None
+
+    with charm_yaml.open() as f:
+        data = yaml.safe_load(f) or {}
 
     parts = data.get("parts", {})
     uv_parts = [p for p in parts.values() if isinstance(p, dict) and p.get("plugin") == "uv"]
@@ -33,6 +37,7 @@ def _compute_patched_yaml(data: dict, rel_str: str) -> "Optional[str]":
         return None
     uv_part = uv_parts[0]
 
+    rel_str = str(rel_path)
     build_env = uv_part.get("build-environment", [])
     patched = False
     new_build_env = []
@@ -48,19 +53,6 @@ def _compute_patched_yaml(data: dict, rel_str: str) -> "Optional[str]":
 
     uv_part["build-environment"] = new_build_env
     return yaml.dump(data, default_flow_style=False)
-
-
-def compute_patched_yaml(charm_yaml: Path, rel_path: Path) -> "Optional[str]":
-    """Load charm_yaml and return patched YAML content, or None if no patch is needed.
-
-    Returns None immediately when rel_path is '.' (charm is at the context root)
-    since no UV_WORKING_DIR update would be needed.
-    """
-    if rel_path == Path(".") or yaml is None or not charm_yaml.exists():
-        return None
-    with charm_yaml.open() as f:
-        data = yaml.safe_load(f) or {}
-    return _compute_patched_yaml(data, str(rel_path))
 
 
 def copy_context_to_temp(
